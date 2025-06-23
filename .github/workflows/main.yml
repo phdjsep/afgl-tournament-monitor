@@ -1,0 +1,128 @@
+name: Website Monitor
+
+on:
+  schedule:
+    # Runs daily at 9 AM UTC (adjust as needed)
+    - cron: '0 9 * * *'
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Monitor website
+      env:
+        DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        TARGET_URL: 'https://afgl.bluegolf.com/bluegolf/afgl25/schedule/index.htm?'  # CHANGE THIS to your target URL
+      run: |
+        # Create monitoring script
+        cat > monitor.js << 'EOF'
+        const https = require('https');
+        const http = require('http');
+        const fs = require('fs');
+        const crypto = require('crypto');
+        
+        const TARGET_URL = process.env.TARGET_URL;
+        const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
+        const HASH_FILE = 'page_hash.txt';
+        
+        // Function to fetch webpage content
+        function fetchPage(url) {
+          return new Promise((resolve, reject) => {
+            const client = url.startsWith('https') ? https : http;
+            client.get(url, (res) => {
+              let data = '';
+              res.on('data', chunk => data += chunk);
+              res.on('end', () => resolve(data));
+            }).on('error', reject);
+          });
+        }
+        
+        // Function to send Discord notification
+        function sendDiscordNotification(message) {
+          return new Promise((resolve, reject) => {
+            const url = new URL(DISCORD_WEBHOOK_URL);
+            const payload = JSON.stringify({
+              content: message,
+              username: 'Website Monitor'
+            });
+            
+            const options = {
+              hostname: url.hostname,
+              path: url.pathname + url.search,
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': payload.length
+              }
+            };
+            
+            const req = https.request(options, (res) => {
+              resolve(res.statusCode);
+            });
+            
+            req.on('error', reject);
+            req.write(payload);
+            req.end();
+          });
+        }
+        
+        async function main() {
+          try {
+            console.log(`Checking ${TARGET_URL}...`);
+            
+            // Fetch current page content
+            const content = await fetchPage(TARGET_URL);
+            const currentHash = crypto.createHash('sha256').update(content).digest('hex');
+            
+            // Check if hash file exists
+            let previousHash = '';
+            if (fs.existsSync(HASH_FILE)) {
+              previousHash = fs.readFileSync(HASH_FILE, 'utf8').trim();
+            }
+            
+            // Compare hashes
+            if (previousHash && currentHash !== previousHash) {
+              console.log('Change detected! Sending notification...');
+              const message = `🔔 **Website Updated!**\n\nThe page ${TARGET_URL} has been updated.\n\nTime: ${new Date().toISOString()}`;
+              await sendDiscordNotification(message);
+              console.log('Discord notification sent!');
+            } else if (!previousHash) {
+              console.log('First run - baseline created');
+              const message = `✅ **Website Monitor Started**\n\nNow monitoring: ${TARGET_URL}\n\nYou'll be notified when this page changes.`;
+              await sendDiscordNotification(message);
+            } else {
+              console.log('No changes detected');
+            }
+            
+            // Save current hash
+            fs.writeFileSync(HASH_FILE, currentHash);
+            
+          } catch (error) {
+            console.error('Error:', error);
+            await sendDiscordNotification(`❌ **Monitor Error**\n\nFailed to check ${TARGET_URL}:\n${error.message}`);
+          }
+        }
+        
+        main();
+        EOF
+        
+        # Run the monitoring script
+        node monitor.js
+        
+    - name: Commit hash file
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add page_hash.txt
+        git diff --staged --quiet || git commit -m "Update page hash"
+        git push
