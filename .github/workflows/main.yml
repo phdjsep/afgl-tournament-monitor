@@ -1,4 +1,4 @@
-name: Website Monitor
+name: AFGL Tournament Monitor
 
 on:
   schedule:
@@ -15,16 +15,16 @@ jobs:
       uses: actions/checkout@v4
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-      
+        
     - name: Set up Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '18'
         
-    - name: Monitor website
+    - name: Monitor AFGL tournament schedule
       env:
         DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        TARGET_URL: 'https://afgl.bluegolf.com/bluegolf/afgl25/schedule/index.htm?'  # CHANGE THIS to your target URL
+        TARGET_URL: 'https://afgl.bluegolf.com/bluegolf/afgl25/schedule/index.htm'
       run: |
         # Create monitoring script
         cat > monitor.js << 'EOF'
@@ -49,13 +49,37 @@ jobs:
           });
         }
         
+        // Function to clean content for tournament table focus
+        function cleanContent(html) {
+          // Remove common dynamic elements that change frequently
+          let cleaned = html
+            // Remove timestamps and dates that might change
+            .replace(/\d{1,2}\/\d{1,2}\/\d{4}/g, 'DATE')
+            .replace(/\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?/gi, 'TIME')
+            // Remove potential session IDs or dynamic parameters
+            .replace(/sessionid=[\w\d]+/gi, '')
+            .replace(/timestamp=[\w\d]+/gi, '')
+            // Remove extra whitespace
+            .replace(/\s+/g, ' ')
+            .trim();
+          
+          // Try to extract table content if possible
+          const tableMatch = cleaned.match(/<table[\s\S]*?<\/table>/gi);
+          if (tableMatch && tableMatch.length > 0) {
+            // Focus on table content only
+            return tableMatch.join('');
+          }
+          
+          return cleaned;
+        }
+        
         // Function to send Discord notification
         function sendDiscordNotification(message) {
           return new Promise((resolve, reject) => {
             const url = new URL(DISCORD_WEBHOOK_URL);
             const payload = JSON.stringify({
               content: message,
-              username: 'Website Monitor'
+              username: 'AFGL Tournament Monitor'
             });
             
             const options = {
@@ -69,10 +93,21 @@ jobs:
             };
             
             const req = https.request(options, (res) => {
-              resolve(res.statusCode);
+              let responseData = '';
+              res.on('data', chunk => responseData += chunk);
+              res.on('end', () => {
+                console.log(`Discord response status: ${res.statusCode}`);
+                if (res.statusCode !== 204) {
+                  console.log(`Discord response: ${responseData}`);
+                }
+                resolve(res.statusCode);
+              });
             });
             
-            req.on('error', reject);
+            req.on('error', (error) => {
+              console.error('Discord webhook error:', error);
+              reject(error);
+            });
             req.write(payload);
             req.end();
           });
@@ -80,30 +115,36 @@ jobs:
         
         async function main() {
           try {
-            console.log(`Checking ${TARGET_URL}...`);
+            console.log(`Checking AFGL tournament schedule...`);
             
             // Fetch current page content
-            const content = await fetchPage(TARGET_URL);
-            const currentHash = crypto.createHash('sha256').update(content).digest('hex');
+            const rawContent = await fetchPage(TARGET_URL);
+            const cleanedContent = cleanContent(rawContent);
+            const currentHash = crypto.createHash('sha256').update(cleanedContent).digest('hex');
+            
+            console.log(`Content length: ${rawContent.length} chars`);
+            console.log(`Cleaned content length: ${cleanedContent.length} chars`);
+            console.log(`Current hash: ${currentHash}`);
             
             // Check if hash file exists
             let previousHash = '';
             if (fs.existsSync(HASH_FILE)) {
               previousHash = fs.readFileSync(HASH_FILE, 'utf8').trim();
+              console.log(`Previous hash: ${previousHash}`);
             }
             
             // Compare hashes
             if (previousHash && currentHash !== previousHash) {
-              console.log('Change detected! Sending notification...');
-              const message = `🔔 **Website Updated!**\n\nThe page ${TARGET_URL} has been updated.\n\nTime: ${new Date().toISOString()}`;
+              console.log('🏆 Tournament schedule change detected! Sending notification...');
+              const message = `🏆 **AFGL Tournament Schedule Updated!**\n\nThe tournament schedule has been updated: ${TARGET_URL}\n\nCheck for new tournaments, date changes, or other updates!\n\nTime: ${new Date().toISOString()}`;
               await sendDiscordNotification(message);
               console.log('Discord notification sent!');
             } else if (!previousHash) {
               console.log('First run - baseline created');
-              const message = `✅ **Website Monitor Started**\n\nNow monitoring: ${TARGET_URL}\n\nYou'll be notified when this page changes.`;
+              const message = `✅ **AFGL Tournament Monitor Started**\n\nNow monitoring AFGL tournament schedule: ${TARGET_URL}\n\nYou'll be notified when tournaments are added, changed, or updated.`;
               await sendDiscordNotification(message);
             } else {
-              console.log('No changes detected');
+              console.log('No tournament schedule changes detected');
             }
             
             // Save current hash
@@ -111,7 +152,7 @@ jobs:
             
           } catch (error) {
             console.error('Error:', error);
-            await sendDiscordNotification(`❌ **Monitor Error**\n\nFailed to check ${TARGET_URL}:\n${error.message}`);
+            await sendDiscordNotification(`❌ **AFGL Monitor Error**\n\nFailed to check tournament schedule:\n${error.message}`);
           }
         }
         
@@ -126,5 +167,5 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add page_hash.txt
-        git diff --staged --quiet || git commit -m "Update page hash"
+        git diff --staged --quiet || git commit -m "Update AFGL schedule hash"
         git push
