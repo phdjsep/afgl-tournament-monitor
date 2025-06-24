@@ -149,7 +149,7 @@ jobs:
             // Compare hashes
             if (previousHash && currentHash !== previousHash) {
               console.log('🏆 Tournament schedule change detected! Sending notification...');
-              const message = `🏆 **AFGL Tournament Schedule Updated!**\n\nThe tournament schedule has been updated: ${TARGET_URL}\n\nCheck for new tournaments, date changes, or other updates!\n\nTime: ${new Date().toISOString()}`;
+              const message = `🏆 **AFGL Tournament Schedule Updated!**\n\nThe tournament schedule has been updated: ${TARGET_URL}\n\nCheck for new tournaments, date changes, or other updates!`;
               await sendDiscordNotification(message);
               console.log('Discord notification sent!');
             } else if (!previousHash) {
