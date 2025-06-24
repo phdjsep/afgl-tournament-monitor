@@ -74,7 +74,7 @@ jobs:
         
         async function testNotification() {
           try {
-            const testMessage = `🏆 **AFGL Tournament Schedule Updated!**\n\nThe tournament schedule has been updated: https://afgl.bluegolf.com/bluegolf/afgl25/schedule/index.htm\n\nCheck for new tournaments, date changes, or other updates!\n\nTime: ${new Date().toISOString()}`;
+            const testMessage = `🏆 **AFGL Tournament Schedule Updated!**\n\nThe tournament schedule has been updated: https://afgl.bluegolf.com/bluegolf/afgl25/schedule/index.htm\n\nCheck for new tournaments, date changes, or other updates!`;
             
             console.log('Testing Discord notification with actual message format...');
             await sendDiscordNotification(testMessage);
