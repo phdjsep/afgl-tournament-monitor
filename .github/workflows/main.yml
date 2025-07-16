@@ -35,7 +35,8 @@ jobs:
         
         const TARGET_URL = process.env.TARGET_URL;
         const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
-        const HASH_FILE = 'page_hash.txt';
+        const TOURNAMENT_COUNT_FILE = 'tournament_count.txt';
+        const TOURNAMENT_DATA_FILE = 'tournament_data.json';
         
         // Function to fetch webpage content
         function fetchPage(url) {
@@ -49,28 +50,63 @@ jobs:
           });
         }
         
-        // Function to clean content for tournament table focus
-        function cleanContent(html) {
-          // Remove common dynamic elements that change frequently
-          let cleaned = html
-            // Remove timestamps and dates that might change
-            .replace(/\d{1,2}\/\d{1,2}\/\d{4}/g, 'DATE')
-            .replace(/\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?/gi, 'TIME')
-            // Remove potential session IDs or dynamic parameters
-            .replace(/sessionid=[\w\d]+/gi, '')
-            .replace(/timestamp=[\w\d]+/gi, '')
-            // Remove extra whitespace
-            .replace(/\s+/g, ' ')
-            .trim();
+        // Function to extract tournament information from HTML
+        function extractTournaments(html) {
+          const tournaments = [];
           
-          // Try to extract table content if possible
-          const tableMatch = cleaned.match(/<table[\s\S]*?<\/table>/gi);
-          if (tableMatch && tableMatch.length > 0) {
-            // Focus on table content only
-            return tableMatch.join('');
+          // Look for table rows that contain tournament data
+          // This regex looks for table rows with tournament-like content
+          const rowRegex = /<tr[^>]*>(.*?)<\/tr>/gis;
+          const cellRegex = /<td[^>]*>(.*?)<\/td>/gis;
+          
+          let match;
+          while ((match = rowRegex.exec(html)) !== null) {
+            const rowContent = match[1];
+            const cells = [];
+            let cellMatch;
+            
+            while ((cellMatch = cellRegex.exec(rowContent)) !== null) {
+              // Clean cell content
+              const cellText = cellMatch[1]
+                .replace(/<[^>]*>/g, '') // Remove HTML tags
+                .replace(/&nbsp;/g, ' ') // Replace non-breaking spaces
+                .replace(/\s+/g, ' ') // Normalize whitespace
+                .trim();
+              
+              if (cellText) {
+                cells.push(cellText);
+              }
+            }
+            
+            // If the row has multiple cells and looks like tournament data
+            // (adjust this logic based on the actual table structure)
+            if (cells.length >= 3) {
+              // Skip header rows or rows that don't look like tournaments
+              const rowText = cells.join(' ').toLowerCase();
+              if (!rowText.includes('tournament') && 
+                  !rowText.includes('date') && 
+                  !rowText.includes('time') &&
+                  !rowText.includes('location') &&
+                  cells.some(cell => cell.length > 2)) {
+                
+                // Create a normalized tournament identifier
+                const tournamentId = cells.slice(0, 3).join('|').toLowerCase()
+                  .replace(/[^a-z0-9\s]/g, '')
+                  .replace(/\s+/g, ' ')
+                  .trim();
+                
+                if (tournamentId) {
+                  tournaments.push({
+                    id: tournamentId,
+                    cells: cells,
+                    raw: cells.join(' | ')
+                  });
+                }
+              }
+            }
           }
           
-          return cleaned;
+          return tournaments;
         }
         
         // Function to send Discord notification
@@ -78,12 +114,11 @@ jobs:
           return new Promise((resolve, reject) => {
             const url = new URL(DISCORD_WEBHOOK_URL);
             
-            // Clean the message to avoid JSON issues
             const cleanMessage = message
-              .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
-              .replace(/"/g, '\\"') // Escape quotes
-              .replace(/\\/g, '\\\\') // Escape backslashes
-              .substring(0, 1900); // Discord has a 2000 char limit
+              .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+              .replace(/"/g, '\\"')
+              .replace(/\\/g, '\\\\')
+              .substring(0, 1900);
             
             const payload = JSON.stringify({
               content: cleanMessage,
@@ -91,7 +126,6 @@ jobs:
             });
             
             console.log(`Payload length: ${payload.length}`);
-            console.log(`Payload preview: ${payload.substring(0, 200)}...`);
             
             const options = {
               hostname: url.hostname,
@@ -132,38 +166,78 @@ jobs:
             
             // Fetch current page content
             const rawContent = await fetchPage(TARGET_URL);
-            const cleanedContent = cleanContent(rawContent);
-            const currentHash = crypto.createHash('sha256').update(cleanedContent).digest('hex');
+            const currentTournaments = extractTournaments(rawContent);
             
-            console.log(`Content length: ${rawContent.length} chars`);
-            console.log(`Cleaned content length: ${cleanedContent.length} chars`);
-            console.log(`Current hash: ${currentHash}`);
+            console.log(`Found ${currentTournaments.length} tournaments`);
             
-            // Check if hash file exists
-            let previousHash = '';
-            if (fs.existsSync(HASH_FILE)) {
-              previousHash = fs.readFileSync(HASH_FILE, 'utf8').trim();
-              console.log(`Previous hash: ${previousHash}`);
+            // Load previous tournament data
+            let previousTournaments = [];
+            let previousCount = 0;
+            
+            if (fs.existsSync(TOURNAMENT_DATA_FILE)) {
+              try {
+                const previousData = JSON.parse(fs.readFileSync(TOURNAMENT_DATA_FILE, 'utf8'));
+                previousTournaments = previousData.tournaments || [];
+                previousCount = previousData.count || 0;
+                console.log(`Previous tournament count: ${previousCount}`);
+              } catch (error) {
+                console.log('Could not read previous tournament data, treating as first run');
+              }
             }
             
-            // Compare hashes
-            if (previousHash && currentHash !== previousHash) {
-              console.log('🏆 Tournament schedule change detected! Sending notification...');
-              const message = `🏆 The tournament schedule has been updated: ${TARGET_URL}
-              Check for new tournaments, date changes, or other updates!`;
+            // Compare tournaments
+            const currentCount = currentTournaments.length;
+            const previousIds = new Set(previousTournaments.map(t => t.id));
+            const currentIds = new Set(currentTournaments.map(t => t.id));
+            
+            // Find new tournaments
+            const newTournaments = currentTournaments.filter(t => !previousIds.has(t.id));
+            
+            // Only alert if there are genuinely new tournaments
+            if (newTournaments.length > 0) {
+              console.log(`🏆 ${newTournaments.length} new tournament(s) detected!`);
+              
+              let message = `🏆 **${newTournaments.length} New Tournament(s) Added!**\n\n`;
+              message += `${TARGET_URL}\n\n`;
+              message += `**New tournaments:**\n`;
+              
+              newTournaments.forEach((tournament, index) => {
+                message += `${index + 1}. ${tournament.raw}\n`;
+              });
+              
+              message += `\nTotal tournaments: ${currentCount} (was ${previousCount})`;
+              
               await sendDiscordNotification(message);
-              console.log('Discord notification sent!');
-            } else if (!previousHash) {
-              console.log('First run - baseline created');
-              const message = `✅ Now monitoring AFGL tournament schedule: ${TARGET_URL}
-              You'll be notified when tournaments are added, changed, or updated.`;
+              console.log('Discord notification sent for new tournaments!');
+              
+            } else if (previousCount === 0) {
+              // First run - send baseline notification
+              console.log('First run - establishing baseline');
+              const message = `✅ **AFGL Tournament Monitor Active**\n\n` +
+                            `Now monitoring: ${TARGET_URL}\n\n` +
+                            `Current tournament count: ${currentCount}\n\n` +
+                            `You'll be notified when new tournaments are added.`;
               await sendDiscordNotification(message);
+              
             } else {
-              console.log('No tournament schedule changes detected');
+              console.log('No new tournaments detected');
+              
+              // Optional: Log if tournaments were removed (uncomment if desired)
+              // const removedTournaments = previousTournaments.filter(t => !currentIds.has(t.id));
+              // if (removedTournaments.length > 0) {
+              //   console.log(`Note: ${removedTournaments.length} tournament(s) appear to have been removed`);
+              // }
             }
             
-            // Save current hash
-            fs.writeFileSync(HASH_FILE, currentHash);
+            // Save current tournament data
+            const currentData = {
+              count: currentCount,
+              tournaments: currentTournaments,
+              lastChecked: new Date().toISOString()
+            };
+            
+            fs.writeFileSync(TOURNAMENT_DATA_FILE, JSON.stringify(currentData, null, 2));
+            fs.writeFileSync(TOURNAMENT_COUNT_FILE, currentCount.toString());
             
           } catch (error) {
             console.error('Error:', error);
@@ -177,10 +251,10 @@ jobs:
         # Run the monitoring script
         node monitor.js
         
-    - name: Commit hash file
+    - name: Commit tournament data
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add page_hash.txt
-        git diff --staged --quiet || git commit -m "Update AFGL schedule hash"
+        git add tournament_count.txt tournament_data.json
+        git diff --staged --quiet || git commit -m "Update AFGL tournament data"
         git push
