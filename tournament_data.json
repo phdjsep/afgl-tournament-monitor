@@ -41,14 +41,14 @@
       "raw": "Jul 19 Register | Florida Tour - Largo Golf Course Largo | · | Largo, FL"
     },
     {
-      "id": "jul 20sw tour welk resort sun welk resort oaks course",
+      "id": "jul 20 registersw tour welk resort sun welk resort oaks course",
       "cells": [
-        "Jul 20",
+        "Jul 20 Register",
         "SW Tour Welk Resort SUN Welk Resort - Oaks Course",
         "·",
         "Escondido, CA"
       ],
-      "raw": "Jul 20 | SW Tour Welk Resort SUN Welk Resort - Oaks Course | · | Escondido, CA"
+      "raw": "Jul 20 Register | SW Tour Welk Resort SUN Welk Resort - Oaks Course | · | Escondido, CA"
     },
     {
       "id": "jul 26 registersw tour foxtail golf club foxtail gc south",
@@ -190,5 +190,5 @@
       "raw": "The Lights at Indio Golf | · | Indio, CA"
     }
   ],
-  "lastChecked": "2025-07-16T19:55:12.019Z"
+  "lastChecked": "2025-07-17T09:05:54.736Z"
 }
