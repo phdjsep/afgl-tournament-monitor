@@ -1,214 +1,277 @@
 name: AFGL Tournament Monitor
 
 on:
-schedule:
-# Runs daily at 9 AM UTC (adjust as needed)
-- cron: ‘0 9 * * *’
-workflow_dispatch: # Allows manual triggering
+  schedule:
+    # Runs daily at 9 AM UTC (adjust as needed)
+    - cron: '0 9 * * *'
+  workflow_dispatch: # Allows manual triggering
 
 jobs:
-monitor:
-runs-on: ubuntu-latest
-
-steps:
-- name: Checkout repository
-  uses: actions/checkout@v4
-  with:
-    token: ${{ secrets.GITHUB_TOKEN }}
+  monitor:
+    runs-on: ubuntu-latest
     
-- name: Set up Node.js
-  uses: actions/setup-node@v4
-  with:
-    node-version: '18'
-    
-- name: Monitor AFGL tournament schedule
-  env:
-    DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-    TARGET_URL: 'https://afgl.bluegolf.com/bluegolf/afgl25/schedule/index.htm'
-  run: |
-    # Create monitoring script
-    cat > monitor.js << 'EOF'
-    const https = require('https');
-    const http = require('http');
-    const fs = require('fs');
-    const crypto = require('crypto');
-    
-    const TARGET_URL = process.env.TARGET_URL;
-    const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
-    const TOURNAMENT_COUNT_FILE = 'tournament_count.txt';
-    
-    // Function to fetch webpage content
-    function fetchPage(url) {
-      return new Promise((resolve, reject) => {
-        const client = url.startsWith('https') ? https : http;
-        client.get(url, (res) => {
-          let data = '';
-          res.on('data', chunk => data += chunk);
-          res.on('end', () => resolve(data));
-        }).on('error', reject);
-      });
-    }
-    
-    // Function to count tournament rows in the table
-    function countTournamentRows(html) {
-      // Look for table rows that contain tournament data
-      const rowRegex = /<tr[^>]*>(.*?)<\/tr>/gis;
-      const cellRegex = /<td[^>]*>/gi;
-      
-      let tournamentCount = 0;
-      let match;
-      
-      while ((match = rowRegex.exec(html)) !== null) {
-        const rowContent = match[1];
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
         
-        // Count cells in this row
-        const cellMatches = rowContent.match(cellRegex);
-        const cellCount = cellMatches ? cellMatches.length : 0;
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
         
-        // If the row has multiple cells, it's likely a data row (not header)
-        // Skip rows with very few cells or that look like headers
-        if (cellCount >= 3) {
-          const rowText = rowContent.toLowerCase();
-          
-          // Skip obvious header rows
-          if (!rowText.includes('tournament name') &&
-              !rowText.includes('date') && 
-              !rowText.includes('time') &&
-              !rowText.includes('location') &&
-              !rowText.includes('register') &&
-              !rowText.includes('header')) {
-            tournamentCount++;
-          }
-        }
-      }
-      
-      return tournamentCount;
-    }
-    
-    // Function to send Discord notification
-    function sendDiscordNotification(message) {
-      return new Promise((resolve, reject) => {
-        const url = new URL(DISCORD_WEBHOOK_URL);
+    - name: Monitor AFGL tournament schedule
+      env:
+        DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        TARGET_URL: 'https://afgl.bluegolf.com/bluegolf/afgl25/schedule/index.htm'
+      run: |
+        # Create monitoring script
+        cat > monitor.js << 'EOF'
+        const https = require('https');
+        const http = require('http');
+        const fs = require('fs');
+        const crypto = require('crypto');
         
-        const cleanMessage = message
-          .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
-          .replace(/"/g, '\\"')
-          .replace(/\\/g, '\\\\')
-          .substring(0, 1900);
+        const TARGET_URL = process.env.TARGET_URL;
+        const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
+        const TOURNAMENT_COUNT_FILE = 'tournament_count.txt';
         
-        const payload = JSON.stringify({
-          content: cleanMessage,
-          username: 'AFGL Tournament Monitor'
-        });
-        
-        console.log(`Payload length: ${payload.length}`);
-        
-        const options = {
-          hostname: url.hostname,
-          path: url.pathname + url.search,
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Content-Length': Buffer.byteLength(payload, 'utf8')
-          }
-        };
-        
-        const req = https.request(options, (res) => {
-          let responseData = '';
-          res.on('data', chunk => responseData += chunk);
-          res.on('end', () => {
-            console.log(`Discord response status: ${res.statusCode}`);
-            if (res.statusCode !== 204 && res.statusCode !== 200) {
-              console.log(`Discord response: ${responseData}`);
-            } else {
-              console.log('Discord notification sent successfully!');
-            }
-            resolve(res.statusCode);
+        // Function to fetch webpage content
+        function fetchPage(url) {
+          return new Promise((resolve, reject) => {
+            console.log(`Attempting to fetch: ${url}`);
+            const client = url.startsWith('https') ? https : http;
+            
+            const request = client.get(url, (res) => {
+              console.log(`HTTP Status: ${res.statusCode}`);
+              
+              if (res.statusCode !== 200) {
+                reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
+                return;
+              }
+              
+              let data = '';
+              res.on('data', chunk => data += chunk);
+              res.on('end', () => {
+                console.log(`Page fetch completed. Content length: ${data.length}`);
+                resolve(data);
+              });
+            });
+            
+            request.on('error', (error) => {
+              console.error('HTTP request error:', error);
+              reject(error);
+            });
+            
+            // Set a timeout
+            request.setTimeout(30000, () => {
+              request.destroy();
+              reject(new Error('Request timeout after 30 seconds'));
+            });
           });
-        });
+        }
         
-        req.on('error', (error) => {
-          console.error('Discord webhook error:', error);
-          reject(error);
-        });
-        req.write(payload);
-        req.end();
-      });
-    }
-    
-    async function main() {
-      try {
-        console.log(`Checking AFGL tournament schedule...`);
-        
-        // Fetch current page content
-        const rawContent = await fetchPage(TARGET_URL);
-        const currentTournamentCount = countTournamentRows(rawContent);
-        
-        console.log(`Found ${currentTournamentCount} tournament rows`);
-        
-        // Load previous tournament count
-        let previousCount = 0;
-        
-        if (fs.existsSync(TOURNAMENT_COUNT_FILE)) {
+        // Function to count tournament rows in the table
+        function countTournamentRows(html) {
           try {
-            previousCount = parseInt(fs.readFileSync(TOURNAMENT_COUNT_FILE, 'utf8').trim()) || 0;
-            console.log(`Previous tournament count: ${previousCount}`);
+            // Look for table rows that contain tournament data
+            const rowRegex = /<tr[^>]*>(.*?)<\/tr>/gis;
+            const cellRegex = /<td[^>]*>/gi;
+            
+            let tournamentCount = 0;
+            let match;
+            
+            while ((match = rowRegex.exec(html)) !== null) {
+              const rowContent = match[1];
+              
+              // Count cells in this row
+              const cellMatches = rowContent.match(cellRegex);
+              const cellCount = cellMatches ? cellMatches.length : 0;
+              
+              // If the row has multiple cells, it's likely a data row (not header)
+              // Skip rows with very few cells or that look like headers
+              if (cellCount >= 3) {
+                const rowText = rowContent.toLowerCase();
+                
+                // Skip obvious header rows
+                if (!rowText.includes('tournament name') &&
+                    !rowText.includes('date') && 
+                    !rowText.includes('time') &&
+                    !rowText.includes('location') &&
+                    !rowText.includes('register') &&
+                    !rowText.includes('header')) {
+                  tournamentCount++;
+                }
+              }
+            }
+            
+            console.log(`Tournament row counting completed: ${tournamentCount} rows found`);
+            return tournamentCount;
           } catch (error) {
-            console.log('Could not read previous count, treating as first run');
+            console.error('Error in countTournamentRows:', error);
+            return 0;
           }
         }
         
-        // Compare counts
-        if (currentTournamentCount > previousCount) {
-          const newTournaments = currentTournamentCount - previousCount;
-          console.log(`🏆 ${newTournaments} new tournament(s) detected!`);
-          
-          const message = `🏆 **${newTournaments} New Tournament(s) Added!**\n\n` +
-                        `${TARGET_URL}\n\n` +
-                        `Tournament count: ${currentTournamentCount} (was ${previousCount})\n\n` +
-                        `Check the schedule for new tournaments!`;
-          
-          await sendDiscordNotification(message);
-          console.log('Discord notification sent for new tournaments!');
-          
-        } else if (previousCount === 0) {
-          // First run - send baseline notification
-          console.log('First run - establishing baseline');
-          const message = `✅ **AFGL Tournament Monitor Active**\n\n` +
-                        `Now monitoring: ${TARGET_URL}\n\n` +
-                        `Current tournament count: ${currentTournamentCount}\n\n` +
-                        `You'll be notified when new tournaments are added.`;
-          await sendDiscordNotification(message);
-          
-        } else if (currentTournamentCount < previousCount) {
-          console.log(`Note: Tournament count decreased from ${previousCount} to ${currentTournamentCount}`);
-          // Optionally notify about removals (uncomment if desired)
-          // const message = `ℹ️ Tournament count decreased from ${previousCount} to ${currentTournamentCount}`;
-          // await sendDiscordNotification(message);
-          
-        } else {
-          console.log('No change in tournament count');
+        // Function to send Discord notification
+        function sendDiscordNotification(message) {
+          return new Promise((resolve, reject) => {
+            const url = new URL(DISCORD_WEBHOOK_URL);
+            
+            const cleanMessage = message
+              .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+              .replace(/"/g, '\\"')
+              .replace(/\\/g, '\\\\')
+              .substring(0, 1900);
+            
+            const payload = JSON.stringify({
+              content: cleanMessage,
+              username: 'AFGL Tournament Monitor'
+            });
+            
+            console.log(`Payload length: ${payload.length}`);
+            
+            const options = {
+              hostname: url.hostname,
+              path: url.pathname + url.search,
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(payload, 'utf8')
+              }
+            };
+            
+            const req = https.request(options, (res) => {
+              let responseData = '';
+              res.on('data', chunk => responseData += chunk);
+              res.on('end', () => {
+                console.log(`Discord response status: ${res.statusCode}`);
+                if (res.statusCode !== 204 && res.statusCode !== 200) {
+                  console.log(`Discord response: ${responseData}`);
+                } else {
+                  console.log('Discord notification sent successfully!');
+                }
+                resolve(res.statusCode);
+              });
+            });
+            
+            req.on('error', (error) => {
+              console.error('Discord webhook error:', error);
+              reject(error);
+            });
+            req.write(payload);
+            req.end();
+          });
         }
         
-        // Save current count
-        fs.writeFileSync(TOURNAMENT_COUNT_FILE, currentTournamentCount.toString());
+        async function main() {
+          try {
+            console.log(`Checking AFGL tournament schedule at: ${TARGET_URL}`);
+            
+            // Validate environment variables
+            if (!TARGET_URL) {
+              throw new Error('TARGET_URL environment variable not set');
+            }
+            if (!DISCORD_WEBHOOK_URL) {
+              throw new Error('DISCORD_WEBHOOK_URL environment variable not set');
+            }
+            
+            // Fetch current page content
+            console.log('Fetching page content...');
+            const rawContent = await fetchPage(TARGET_URL);
+            
+            if (!rawContent || rawContent.length < 100) {
+              throw new Error(`Page content seems invalid. Length: ${rawContent ? rawContent.length : 0}`);
+            }
+            
+            console.log(`Page fetched successfully. Content length: ${rawContent.length} characters`);
+            
+            const currentTournamentCount = countTournamentRows(rawContent);
+            console.log(`Current tournament count: ${currentTournamentCount}`);
+            
+            // Load previous tournament count
+            let previousCount = 0;
+            
+            if (fs.existsSync(TOURNAMENT_COUNT_FILE)) {
+              try {
+                const fileContent = fs.readFileSync(TOURNAMENT_COUNT_FILE, 'utf8').trim();
+                previousCount = parseInt(fileContent) || 0;
+                console.log(`Previous tournament count: ${previousCount}`);
+              } catch (error) {
+                console.log('Could not read previous count file:', error.message);
+                console.log('Treating as first run');
+              }
+            } else {
+              console.log('No previous count file found - treating as first run');
+            }
+            
+            // Compare counts
+            if (currentTournamentCount > previousCount) {
+              const newTournaments = currentTournamentCount - previousCount;
+              console.log(`🏆 ${newTournaments} new tournament(s) detected!`);
+              
+              const message = `🏆 **${newTournaments} New Tournament(s) Added!**\n\n` +
+                            `${TARGET_URL}\n\n` +
+                            `Tournament count: ${currentTournamentCount} (was ${previousCount})\n\n` +
+                            `Check the schedule for new tournaments!`;
+              
+              console.log('Sending Discord notification...');
+              await sendDiscordNotification(message);
+              console.log('Discord notification sent for new tournaments!');
+              
+            } else if (previousCount === 0) {
+              // First run - send baseline notification
+              console.log('First run - establishing baseline');
+              const message = `✅ **AFGL Tournament Monitor Active**\n\n` +
+                            `Now monitoring: ${TARGET_URL}\n\n` +
+                            `Current tournament count: ${currentTournamentCount}\n\n` +
+                            `You'll be notified when new tournaments are added.`;
+              
+              console.log('Sending initial Discord notification...');
+              await sendDiscordNotification(message);
+              
+            } else if (currentTournamentCount < previousCount) {
+              console.log(`Note: Tournament count decreased from ${previousCount} to ${currentTournamentCount}`);
+              // Optionally notify about removals (uncomment if desired)
+              // const message = `ℹ️ Tournament count decreased from ${previousCount} to ${currentTournamentCount}`;
+              // await sendDiscordNotification(message);
+              
+            } else {
+              console.log('No change in tournament count');
+            }
+            
+            // Save current count
+            console.log(`Saving current count: ${currentTournamentCount}`);
+            fs.writeFileSync(TOURNAMENT_COUNT_FILE, currentTournamentCount.toString());
+            console.log('Count saved successfully');
+            
+          } catch (error) {
+            console.error('Error in main function:', error);
+            console.error('Stack trace:', error.stack);
+            
+            try {
+              const errorMessage = `❌ **AFGL Monitor Error**\n\nFailed to check tournament schedule:\n\`\`\`\n${error.message}\n\`\`\``;
+              await sendDiscordNotification(errorMessage);
+            } catch (notificationError) {
+              console.error('Failed to send error notification:', notificationError);
+            }
+            
+            // Re-throw to ensure GitHub Action fails
+            throw error;
+          }
+        }
         
-      } catch (error) {
-        console.error('Error:', error);
-        await sendDiscordNotification(`❌ **AFGL Monitor Error**\n\nFailed to check tournament schedule:\n${error.message}`);
-      }
-    }
-    
-    main();
-    EOF
-    
-    # Run the monitoring script
-    node monitor.js
-    
-- name: Commit tournament count
-  run: |
-    git config --local user.email "action@github.com"
-    git config --local user.name "GitHub Action"
-    git add tournament_count.txt
-    git diff --staged --quiet || git commit -m "Update AFGL tournament count"
-    git push
+        main();
+        EOF
+        
+        # Run the monitoring script
+        node monitor.js
+        
+    - name: Commit tournament count
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add tournament_count.txt
+        git diff --staged --quiet || git commit -m "Update AFGL tournament count"
+        git push
