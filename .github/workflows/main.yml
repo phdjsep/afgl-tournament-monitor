@@ -248,7 +248,19 @@ jobs:
             }
             
             // Compare counts
-            if (currentTournamentCount > previousCount) {
+            if (previousCount === 0 && currentTournamentCount > 0) {
+              // First run with tournaments found - establish baseline
+              console.log('First run with tournaments detected - establishing baseline');
+              const message = `✅ **AFGL Tournament Monitor Active**\n\n` +
+                            `Now monitoring: ${TARGET_URL}\n\n` +
+                            `Baseline tournament count: ${currentTournamentCount}\n\n` +
+                            `You'll be notified when new tournaments are added to the schedule.`;
+              
+              console.log('Sending baseline establishment notification...');
+              await sendDiscordNotification(message);
+              
+            } else if (currentTournamentCount > previousCount && previousCount > 0) {
+              // Genuine increase in tournaments (not first run)
               const newTournaments = currentTournamentCount - previousCount;
               console.log(`🏆 ${newTournaments} new tournament(s) detected!`);
               
@@ -257,7 +269,7 @@ jobs:
                             `Tournament count: ${currentTournamentCount} (was ${previousCount})\n\n` +
                             `Check the schedule for new tournaments!`;
               
-              console.log('Sending Discord notification...');
+              console.log('Sending Discord notification for new tournaments...');
               await sendDiscordNotification(message);
               console.log('Discord notification sent for new tournaments!');
               
@@ -266,17 +278,6 @@ jobs:
               console.log('Warning: No tournaments detected in current or previous runs');
               console.log('This might indicate an issue with the tournament detection logic');
               // Don't send notification to avoid spam
-              
-            } else if (previousCount === 0) {
-              // First run - send baseline notification
-              console.log('First run - establishing baseline');
-              const message = `✅ **AFGL Tournament Monitor Active**\n\n` +
-                            `Now monitoring: ${TARGET_URL}\n\n` +
-                            `Current tournament count: ${currentTournamentCount}\n\n` +
-                            `You'll be notified when new tournaments are added.`;
-              
-              console.log('Sending initial Discord notification...');
-              await sendDiscordNotification(message);
               
             } else if (currentTournamentCount < previousCount) {
               console.log(`Note: Tournament count decreased from ${previousCount} to ${currentTournamentCount}`);
