@@ -75,41 +75,82 @@ jobs:
         // Function to count tournament rows in the table
         function countTournamentRows(html) {
           try {
-            // Look for table rows that contain tournament data
-            const rowRegex = /<tr[^>]*>(.*?)<\/tr>/gis;
-            const cellRegex = /<td[^>]*>/gi;
+            console.log('Analyzing HTML content for tournament rows...');
             
-            let tournamentCount = 0;
-            let match;
+            // First, let's see if we can find any tables
+            const tableMatches = html.match(/<table[^>]*>[\s\S]*?<\/table>/gi);
+            console.log(`Found ${tableMatches ? tableMatches.length : 0} table(s)`);
             
-            while ((match = rowRegex.exec(html)) !== null) {
-              const rowContent = match[1];
-              
-              // Count cells in this row
-              const cellMatches = rowContent.match(cellRegex);
-              const cellCount = cellMatches ? cellMatches.length : 0;
-              
-              // If the row has multiple cells, it's likely a data row (not header)
-              // Skip rows with very few cells or that look like headers
-              if (cellCount >= 3) {
-                const rowText = rowContent.toLowerCase();
-                
-                // Skip obvious header rows
-                if (!rowText.includes('tournament name') &&
-                    !rowText.includes('date') && 
-                    !rowText.includes('time') &&
-                    !rowText.includes('location') &&
-                    !rowText.includes('register') &&
-                    !rowText.includes('header')) {
-                  tournamentCount++;
-                }
-              }
+            if (!tableMatches || tableMatches.length === 0) {
+              console.log('No tables found in HTML');
+              return 0;
             }
             
-            console.log(`Tournament row counting completed: ${tournamentCount} rows found`);
-            return tournamentCount;
+            let totalTournamentCount = 0;
+            
+            // Check each table
+            tableMatches.forEach((table, tableIndex) => {
+              console.log(`Analyzing table ${tableIndex + 1}...`);
+              
+              // Look for table rows
+              const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+              const rows = table.match(rowRegex);
+              
+              if (!rows) {
+                console.log(`  No rows found in table ${tableIndex + 1}`);
+                return;
+              }
+              
+              console.log(`  Found ${rows.length} total rows in table ${tableIndex + 1}`);
+              
+              let tableRowCount = 0;
+              
+              rows.forEach((row, rowIndex) => {
+                // Count cells (both td and th)
+                const cellRegex = /<(td|th)[^>]*>/gi;
+                const cellMatches = row.match(cellRegex);
+                const cellCount = cellMatches ? cellMatches.length : 0;
+                
+                // Get text content of the row
+                const rowText = row
+                  .replace(/<[^>]*>/g, ' ') // Remove HTML tags
+                  .replace(/&nbsp;/g, ' ') // Replace non-breaking spaces
+                  .replace(/\s+/g, ' ') // Normalize whitespace
+                  .trim()
+                  .toLowerCase();
+                
+                console.log(`    Row ${rowIndex + 1}: ${cellCount} cells, text: "${rowText.substring(0, 100)}${rowText.length > 100 ? '...' : ''}"`);
+                
+                // Skip empty rows
+                if (rowText.length === 0) {
+                  return;
+                }
+                
+                // Skip obvious header rows
+                if (rowText.includes('tournament') && rowText.includes('date') ||
+                    rowText.includes('name') && rowText.includes('location') ||
+                    rowText.includes('register') && rowText.includes('time')) {
+                  console.log(`      Skipping header row`);
+                  return;
+                }
+                
+                // Count rows with reasonable cell count and content
+                if (cellCount >= 2 && rowText.length > 5) {
+                  tableRowCount++;
+                  console.log(`      Counting as tournament row`);
+                }
+              });
+              
+              console.log(`  Table ${tableIndex + 1} tournament rows: ${tableRowCount}`);
+              totalTournamentCount += tableRowCount;
+            });
+            
+            console.log(`Total tournament rows found: ${totalTournamentCount}`);
+            return totalTournamentCount;
+            
           } catch (error) {
             console.error('Error in countTournamentRows:', error);
+            console.error('Stack trace:', error.stack);
             return 0;
           }
         }
@@ -219,6 +260,12 @@ jobs:
               console.log('Sending Discord notification...');
               await sendDiscordNotification(message);
               console.log('Discord notification sent for new tournaments!');
+              
+            } else if (previousCount === 0 && currentTournamentCount === 0) {
+              // Both current and previous are 0 - something might be wrong with detection
+              console.log('Warning: No tournaments detected in current or previous runs');
+              console.log('This might indicate an issue with the tournament detection logic');
+              // Don't send notification to avoid spam
               
             } else if (previousCount === 0) {
               // First run - send baseline notification
