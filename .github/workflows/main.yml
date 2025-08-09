@@ -264,11 +264,11 @@ jobs:
               const newTournaments = currentTournamentCount - previousCount;
               console.log(`🏆 ${newTournaments} new tournament(s) detected!`);
               
-              const message = `🏆 **${newTournaments} New Tournament(s) Added!**\n\n` +
-                            `${TARGET_URL}\n\n` +
-                            `Tournament count: ${currentTournamentCount} (was ${previousCount})\n\n` +
-                            `Check the schedule for new tournaments!`;
               
+              const message = `🏆 **${newTournaments} New Tournament(s) Added!**\n\n` +
+                `<${TARGET_URL}>\n\n` +
+                `Tournament count: ${currentTournamentCount} (was ${previousCount})\n\n` +
+                `Check the schedule for new tournaments!`;
               console.log('Sending Discord notification for new tournaments...');
               await sendDiscordNotification(message);
               console.log('Discord notification sent for new tournaments!');
