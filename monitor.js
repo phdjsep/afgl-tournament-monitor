@@ -247,6 +247,30 @@ async function main() {
 
     console.log(`Found ${newTournaments.length} new tournament(s)`);
 
+    // Detect updated tournaments
+    const updatedTournaments = [];
+    currentTournaments.forEach(current => {
+      const previous = previousTournaments.find(p => p.key === current.key);
+      if (previous) {
+        const changes = [];
+        if (previous.date !== current.date) {
+          changes.push({ field: 'Date', old: previous.date, new: current.date });
+        }
+        if (previous.location !== current.location) {
+          changes.push({ field: 'Location', old: previous.location, new: current.location });
+        }
+        if (previous.name !== current.name) {
+          changes.push({ field: 'Name', old: previous.name, new: current.name });
+        }
+
+        if (changes.length > 0) {
+          updatedTournaments.push({ tournament: current, changes });
+        }
+      }
+    });
+
+    console.log(`Found ${updatedTournaments.length} updated tournament(s)`);
+
     // Compare and notify
     if (previousTournaments.length === 0 && currentTournaments.length > 0) {
       // First run with tournaments found - establish baseline
@@ -284,19 +308,40 @@ async function main() {
       console.log('Sending Discord notification for new tournaments...');
       await sendDiscordNotification(message);
       console.log('Discord notification sent for new tournaments!');
+    }
 
-    } else if (previousTournaments.length === 0 && currentTournaments.length === 0) {
+    // Send notification for updated tournaments
+    if (updatedTournaments.length > 0) {
+      console.log(`📝 ${updatedTournaments.length} tournament(s) updated!`);
+
+      let message = `📝 **${updatedTournaments.length} Tournament(s) Updated!**\n\n`;
+
+      updatedTournaments.forEach(({ tournament, changes }) => {
+        message += `📅 **${tournament.name}**\n`;
+        changes.forEach(change => {
+          message += `  ${change.field}: ~~${change.old}~~ → ${change.new}\n`;
+        });
+        message += `\n`;
+      });
+
+      message += `<${TARGET_URL}>`;
+
+      console.log('Sending Discord notification for updated tournaments...');
+      await sendDiscordNotification(message);
+      console.log('Discord notification sent for updated tournaments!');
+    }
+
+    // Additional logging for edge cases
+    if (previousTournaments.length === 0 && currentTournaments.length === 0) {
       // Both current and previous are 0 - something might be wrong with detection
       console.log('Warning: No tournaments detected in current or previous runs');
       console.log('This might indicate an issue with the tournament detection logic');
       // Don't send notification to avoid spam
-
     } else if (currentTournaments.length < previousTournaments.length) {
       console.log(`Note: Tournament count decreased from ${previousTournaments.length} to ${currentTournaments.length}`);
       // Could be tournaments removed or date filtering
-
-    } else {
-      console.log('No new tournaments detected');
+    } else if (newTournaments.length === 0 && updatedTournaments.length === 0) {
+      console.log('No new or updated tournaments detected');
     }
 
     // Save current tournaments with error handling
