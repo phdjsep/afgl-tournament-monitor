@@ -137,9 +137,9 @@ function sendDiscordNotification(message) {
   return new Promise((resolve, reject) => {
     const url = new URL(DISCORD_WEBHOOK_URL);
 
-    // Fix: Escape backslashes first, then quotes
+    // Sanitize message while preserving newlines
     const cleanMessage = message
-      .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
+      .replace(/[\u0000-\u0008\u000B-\u000C\u000E-\u001F\u007F-\u009F]/g, '') // Remove control chars except \n (0x0A) and \r (0x0D)
       .replace(/\\/g, '\\\\')
       .replace(/"/g, '\\"')
       .substring(0, 2000); // Use full Discord limit
@@ -275,10 +275,23 @@ async function main() {
     if (previousTournaments.length === 0 && currentTournaments.length > 0) {
       // First run with tournaments found - establish baseline
       console.log('First run with tournaments detected - establishing baseline');
-      const message = `✅ **AFGL Tournament Monitor Active**\n\n` +
-                    `Now monitoring: ${TARGET_URL}\n\n` +
-                    `Baseline tournament count: ${currentTournaments.length}\n\n` +
-                    `You'll be notified when new tournaments are added to the schedule.`;
+      let message = `✅ **AFGL Tournament Monitor Active**\n\nNow monitoring: ${TARGET_URL}\n\nFound ${currentTournaments.length} tournament(s):\n\n`;
+
+      // Show current tournaments as baseline
+      currentTournaments.forEach(tournament => {
+        message += `📅 **${tournament.name}**\n`;
+        if (tournament.date && tournament.location) {
+          message += `${tournament.date} • ${tournament.location}\n\n`;
+        } else if (tournament.date) {
+          message += `${tournament.date}\n\n`;
+        } else if (tournament.location) {
+          message += `${tournament.location}\n\n`;
+        } else {
+          message += `\n`;
+        }
+      });
+
+      message += `You'll be notified when tournaments are added or updated.`;
 
       console.log('Sending baseline establishment notification...');
       await sendDiscordNotification(message);
