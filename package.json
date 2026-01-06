@@ -1,0 +1,12 @@
+{
+  "name": "afgl-tournament-monitor",
+  "version": "1.0.0",
+  "description": "Monitor AFGL tournament schedule for changes",
+  "main": "monitor.js",
+  "scripts": {
+    "start": "node monitor.js"
+  },
+  "dependencies": {
+    "node-html-parser": "^6.1.12"
+  }
+}

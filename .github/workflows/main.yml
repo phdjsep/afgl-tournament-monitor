@@ -6,6 +6,10 @@ on:
     - cron: '0 9 * * *'
   workflow_dispatch: # Allows manual triggering
 
+concurrency:
+  group: afgl-monitor
+  cancel-in-progress: false
+
 jobs:
   monitor:
     runs-on: ubuntu-latest
@@ -20,306 +24,34 @@ jobs:
       uses: actions/setup-node@v4
       with:
         node-version: '18'
-        
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm install
+
     - name: Monitor AFGL tournament schedule
       env:
         DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        TARGET_URL: 'https://afgl.bluegolf.com/bluegolf/afgl25/schedule/index.htm'
-      run: |
-        # Create monitoring script
-        cat > monitor.js << 'EOF'
-        const https = require('https');
-        const http = require('http');
-        const fs = require('fs');
-        const crypto = require('crypto');
+        TARGET_URL: 'https://afgl.bluegolf.com/bluegolf/afgl26/schedule/index.htm'
+      run: node monitor.js
         
-        const TARGET_URL = process.env.TARGET_URL;
-        const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
-        const TOURNAMENT_COUNT_FILE = 'tournament_count.txt';
-        
-        // Function to fetch webpage content
-        function fetchPage(url) {
-          return new Promise((resolve, reject) => {
-            console.log(`Attempting to fetch: ${url}`);
-            const client = url.startsWith('https') ? https : http;
-            
-            const request = client.get(url, (res) => {
-              console.log(`HTTP Status: ${res.statusCode}`);
-              
-              if (res.statusCode !== 200) {
-                reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
-                return;
-              }
-              
-              let data = '';
-              res.on('data', chunk => data += chunk);
-              res.on('end', () => {
-                console.log(`Page fetch completed. Content length: ${data.length}`);
-                resolve(data);
-              });
-            });
-            
-            request.on('error', (error) => {
-              console.error('HTTP request error:', error);
-              reject(error);
-            });
-            
-            // Set a timeout
-            request.setTimeout(30000, () => {
-              request.destroy();
-              reject(new Error('Request timeout after 30 seconds'));
-            });
-          });
-        }
-        
-        // Function to count tournament rows in the table
-        function countTournamentRows(html) {
-          try {
-            console.log('Analyzing HTML content for tournament rows...');
-            
-            // First, let's see if we can find any tables
-            const tableMatches = html.match(/<table[^>]*>[\s\S]*?<\/table>/gi);
-            console.log(`Found ${tableMatches ? tableMatches.length : 0} table(s)`);
-            
-            if (!tableMatches || tableMatches.length === 0) {
-              console.log('No tables found in HTML');
-              return 0;
-            }
-            
-            let totalTournamentCount = 0;
-            
-            // Check each table
-            tableMatches.forEach((table, tableIndex) => {
-              console.log(`Analyzing table ${tableIndex + 1}...`);
-              
-              // Look for table rows
-              const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-              const rows = table.match(rowRegex);
-              
-              if (!rows) {
-                console.log(`  No rows found in table ${tableIndex + 1}`);
-                return;
-              }
-              
-              console.log(`  Found ${rows.length} total rows in table ${tableIndex + 1}`);
-              
-              let tableRowCount = 0;
-              
-              rows.forEach((row, rowIndex) => {
-                // Count cells (both td and th)
-                const cellRegex = /<(td|th)[^>]*>/gi;
-                const cellMatches = row.match(cellRegex);
-                const cellCount = cellMatches ? cellMatches.length : 0;
-                
-                // Get text content of the row
-                const rowText = row
-                  .replace(/<[^>]*>/g, ' ') // Remove HTML tags
-                  .replace(/&nbsp;/g, ' ') // Replace non-breaking spaces
-                  .replace(/\s+/g, ' ') // Normalize whitespace
-                  .trim()
-                  .toLowerCase();
-                
-                console.log(`    Row ${rowIndex + 1}: ${cellCount} cells, text: "${rowText.substring(0, 100)}${rowText.length > 100 ? '...' : ''}"`);
-                
-                // Skip empty rows
-                if (rowText.length === 0) {
-                  return;
-                }
-                
-                // Skip obvious header rows
-                if (rowText.includes('tournament') && rowText.includes('date') ||
-                    rowText.includes('name') && rowText.includes('location') ||
-                    rowText.includes('register') && rowText.includes('time')) {
-                  console.log(`      Skipping header row`);
-                  return;
-                }
-                
-                // Count rows with reasonable cell count and content
-                if (cellCount >= 2 && rowText.length > 5) {
-                  tableRowCount++;
-                  console.log(`      Counting as tournament row`);
-                }
-              });
-              
-              console.log(`  Table ${tableIndex + 1} tournament rows: ${tableRowCount}`);
-              totalTournamentCount += tableRowCount;
-            });
-            
-            console.log(`Total tournament rows found: ${totalTournamentCount}`);
-            return totalTournamentCount;
-            
-          } catch (error) {
-            console.error('Error in countTournamentRows:', error);
-            console.error('Stack trace:', error.stack);
-            return 0;
-          }
-        }
-        
-        // Function to send Discord notification
-        function sendDiscordNotification(message) {
-          return new Promise((resolve, reject) => {
-            const url = new URL(DISCORD_WEBHOOK_URL);
-            
-            const cleanMessage = message
-              .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
-              .replace(/"/g, '\\"')
-              .replace(/\\/g, '\\\\')
-              .substring(0, 1900);
-            
-            const payload = JSON.stringify({
-              content: cleanMessage,
-              username: 'AFGL Tournament Monitor'
-            });
-            
-            console.log(`Payload length: ${payload.length}`);
-            
-            const options = {
-              hostname: url.hostname,
-              path: url.pathname + url.search,
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(payload, 'utf8')
-              }
-            };
-            
-            const req = https.request(options, (res) => {
-              let responseData = '';
-              res.on('data', chunk => responseData += chunk);
-              res.on('end', () => {
-                console.log(`Discord response status: ${res.statusCode}`);
-                if (res.statusCode !== 204 && res.statusCode !== 200) {
-                  console.log(`Discord response: ${responseData}`);
-                } else {
-                  console.log('Discord notification sent successfully!');
-                }
-                resolve(res.statusCode);
-              });
-            });
-            
-            req.on('error', (error) => {
-              console.error('Discord webhook error:', error);
-              reject(error);
-            });
-            req.write(payload);
-            req.end();
-          });
-        }
-        
-        async function main() {
-          try {
-            console.log(`Checking AFGL tournament schedule at: ${TARGET_URL}`);
-            
-            // Validate environment variables
-            if (!TARGET_URL) {
-              throw new Error('TARGET_URL environment variable not set');
-            }
-            if (!DISCORD_WEBHOOK_URL) {
-              throw new Error('DISCORD_WEBHOOK_URL environment variable not set');
-            }
-            
-            // Fetch current page content
-            console.log('Fetching page content...');
-            const rawContent = await fetchPage(TARGET_URL);
-            
-            if (!rawContent || rawContent.length < 100) {
-              throw new Error(`Page content seems invalid. Length: ${rawContent ? rawContent.length : 0}`);
-            }
-            
-            console.log(`Page fetched successfully. Content length: ${rawContent.length} characters`);
-            
-            const currentTournamentCount = countTournamentRows(rawContent);
-            console.log(`Current tournament count: ${currentTournamentCount}`);
-            
-            // Load previous tournament count
-            let previousCount = 0;
-            
-            if (fs.existsSync(TOURNAMENT_COUNT_FILE)) {
-              try {
-                const fileContent = fs.readFileSync(TOURNAMENT_COUNT_FILE, 'utf8').trim();
-                previousCount = parseInt(fileContent) || 0;
-                console.log(`Previous tournament count: ${previousCount}`);
-              } catch (error) {
-                console.log('Could not read previous count file:', error.message);
-                console.log('Treating as first run');
-              }
-            } else {
-              console.log('No previous count file found - treating as first run');
-            }
-            
-            // Compare counts
-            if (previousCount === 0 && currentTournamentCount > 0) {
-              // First run with tournaments found - establish baseline
-              console.log('First run with tournaments detected - establishing baseline');
-              const message = `✅ **AFGL Tournament Monitor Active**\n\n` +
-                            `Now monitoring: ${TARGET_URL}\n\n` +
-                            `Baseline tournament count: ${currentTournamentCount}\n\n` +
-                            `You'll be notified when new tournaments are added to the schedule.`;
-              
-              console.log('Sending baseline establishment notification...');
-              await sendDiscordNotification(message);
-              
-            } else if (currentTournamentCount > previousCount && previousCount > 0) {
-              // Genuine increase in tournaments (not first run)
-              const newTournaments = currentTournamentCount - previousCount;
-              console.log(`🏆 ${newTournaments} new tournament(s) detected!`);
-              
-              
-              const message = `🏆 **${newTournaments} New Tournament(s) Added!**\n\n` +
-                `<${TARGET_URL}>\n\n` +
-                `Tournament count: ${currentTournamentCount} (was ${previousCount})\n\n` +
-                `Check the schedule for new tournaments!`;
-              console.log('Sending Discord notification for new tournaments...');
-              await sendDiscordNotification(message);
-              console.log('Discord notification sent for new tournaments!');
-              
-            } else if (previousCount === 0 && currentTournamentCount === 0) {
-              // Both current and previous are 0 - something might be wrong with detection
-              console.log('Warning: No tournaments detected in current or previous runs');
-              console.log('This might indicate an issue with the tournament detection logic');
-              // Don't send notification to avoid spam
-              
-            } else if (currentTournamentCount < previousCount) {
-              console.log(`Note: Tournament count decreased from ${previousCount} to ${currentTournamentCount}`);
-              // Optionally notify about removals (uncomment if desired)
-              // const message = `ℹ️ Tournament count decreased from ${previousCount} to ${currentTournamentCount}`;
-              // await sendDiscordNotification(message);
-              
-            } else {
-              console.log('No change in tournament count');
-            }
-            
-            // Save current count
-            console.log(`Saving current count: ${currentTournamentCount}`);
-            fs.writeFileSync(TOURNAMENT_COUNT_FILE, currentTournamentCount.toString());
-            console.log('Count saved successfully');
-            
-          } catch (error) {
-            console.error('Error in main function:', error);
-            console.error('Stack trace:', error.stack);
-            
-            try {
-              const errorMessage = `❌ **AFGL Monitor Error**\n\nFailed to check tournament schedule:\n\`\`\`\n${error.message}\n\`\`\``;
-              await sendDiscordNotification(errorMessage);
-            } catch (notificationError) {
-              console.error('Failed to send error notification:', notificationError);
-            }
-            
-            // Re-throw to ensure GitHub Action fails
-            throw error;
-          }
-        }
-        
-        main();
-        EOF
-        
-        # Run the monitoring script
-        node monitor.js
-        
-    - name: Commit tournament count
+    - name: Commit tournament data
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add tournament_count.txt
-        git diff --staged --quiet || git commit -m "Update AFGL tournament count"
-        git push
+
+        if [ -f tournament_count.txt ] || [ -f tournaments.json ]; then
+          git add tournament_count.txt tournaments.json package.json package-lock.json 2>/dev/null || true
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Update AFGL tournament data"
+            git push || {
+              echo "Failed to push changes"
+              exit 1
+            }
+          fi
+        else
+          echo "Warning: tournament files not found"
+          exit 1
+        fi
