@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-01-21T09:05:06.929Z",
+  "lastChecked": "2026-01-22T09:06:17.685Z",
   "tournaments": [
     {
       "key": "LV HoloEx Sat 100",
@@ -12,6 +12,18 @@
       "name": "LV HoloEx Sun 100",
       "date": "Feb 1",
       "location": "Henderson, NV"
+    },
+    {
+      "key": "SW Tour - Arcadia Saturday",
+      "name": "SW Tour - Arcadia Saturday",
+      "date": "Mar 21",
+      "location": "Arcadia, CA"
+    },
+    {
+      "key": "SW Tour: Arcadia - Sunday",
+      "name": "SW Tour: Arcadia - Sunday",
+      "date": "Mar 22",
+      "location": "Arcadia, CA"
     }
   ]
 }
