@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-02-16T09:14:06.736Z",
+  "lastChecked": "2026-02-17T09:13:35.395Z",
   "tournaments": [
     {
       "key": "LV HoloEx Sat 100",
@@ -48,6 +48,12 @@
       "name": "Crystal Springs SUN",
       "date": "Apr 19",
       "location": "Hamburg, NJ"
+    },
+    {
+      "key": "SW Tour -The Lights at Indio 50/100",
+      "name": "SW Tour -The Lights at Indio 50/100",
+      "date": "Apr 25",
+      "location": "Indio, CA"
     }
   ]
 }
