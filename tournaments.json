@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-03-02T09:12:42.784Z",
+  "lastChecked": "2026-03-03T09:10:49.893Z",
   "tournaments": [
     {
       "key": "LV HoloEx Sat 100",
@@ -54,6 +54,18 @@
       "name": "SW Tour -The Lights at Indio 50/100",
       "date": "Apr 25",
       "location": "Indio, CA"
+    },
+    {
+      "key": "Cal State Games",
+      "name": "Cal State Games",
+      "date": "Jul 18",
+      "location": "Escondido, CA"
+    },
+    {
+      "key": "State Games Follow-Up Tournament",
+      "name": "State Games Follow-Up Tournament",
+      "date": "Jul 19",
+      "location": "Escondido, CA"
     }
   ]
 }
