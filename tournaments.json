@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-03-06T09:08:29.137Z",
+  "lastChecked": "2026-03-07T09:04:19.343Z",
   "tournaments": [
     {
       "key": "LV HoloEx Sat 100",
@@ -36,6 +36,12 @@
       "name": "SW Tour Welk Resort SUN",
       "date": "Mar 22",
       "location": "Escondido, CA"
+    },
+    {
+      "key": "Florida Tour - Seven Springs 100",
+      "name": "Florida Tour - Seven Springs 100",
+      "date": "Apr 4",
+      "location": "New Port Richey, FL"
     },
     {
       "key": "Crystal Springs SAT",
