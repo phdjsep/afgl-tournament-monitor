@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-03-07T09:04:19.343Z",
+  "lastChecked": "2026-03-08T09:04:14.506Z",
   "tournaments": [
     {
       "key": "LV HoloEx Sat 100",
@@ -62,6 +62,12 @@
       "location": "Indio, CA"
     },
     {
+      "key": "FIFG World Cup",
+      "name": "FIFG World Cup",
+      "date": "May 27 - \nJun 7",
+      "location": "Guerrero, -"
+    },
+    {
       "key": "Cal State Games",
       "name": "Cal State Games",
       "date": "Jul 18",
@@ -72,6 +78,12 @@
       "name": "State Games Follow-Up Tournament",
       "date": "Jul 19",
       "location": "Escondido, CA"
+    },
+    {
+      "key": "The Nationals 2026",
+      "name": "The Nationals 2026",
+      "date": "Nov 19-22",
+      "location": "Palm Springs, CA"
     }
   ]
 }
