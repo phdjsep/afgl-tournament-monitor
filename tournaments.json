@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-03-30T09:26:09.844Z",
+  "lastChecked": "2026-04-02T09:18:22.444Z",
   "tournaments": [
     {
       "key": "LV HoloEx Sat 100",
@@ -60,6 +60,18 @@
       "name": "SW Tour -The Lights at Indio 50/100",
       "date": "Apr 25",
       "location": "Indio, CA"
+    },
+    {
+      "key": "Fox Hills 100 SAT",
+      "name": "Fox Hills 100 SAT",
+      "date": "May 9",
+      "location": "Plymouth, MI"
+    },
+    {
+      "key": "Fox Hills 100 SUN",
+      "name": "Fox Hills 100 SUN",
+      "date": "May 10",
+      "location": "Plymouth, MI"
     },
     {
       "key": "FIFG World Cup",
