@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-04-12T09:13:48.842Z",
+  "lastChecked": "2026-04-13T09:31:18.537Z",
   "tournaments": [
     {
       "key": "LV HoloEx Sat 100",
@@ -72,6 +72,12 @@
       "name": "Fox Hills 100 SUN",
       "date": "May 10",
       "location": "Plymouth, MI"
+    },
+    {
+      "key": "Largo - Florida Tour",
+      "name": "Largo - Florida Tour",
+      "date": "May 15-17",
+      "location": "Largo, FL"
     },
     {
       "key": "FIFG World Cup",
