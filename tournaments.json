@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-05-04T09:41:07.503Z",
+  "lastChecked": "2026-05-05T09:33:35.169Z",
   "tournaments": [
     {
       "key": "LV HoloEx Sat 100",
@@ -84,6 +84,18 @@
       "name": "FIFG World Cup",
       "date": "May 27 - \nJun 7",
       "location": "Guerrero, -"
+    },
+    {
+      "key": "State Games of Michigan",
+      "name": "State Games of Michigan",
+      "date": "Jun 27",
+      "location": "Lansing, MI"
+    },
+    {
+      "key": "Bay State Games-Amateur Tour Event",
+      "name": "Bay State Games-Amateur Tour Event",
+      "date": "Jul 11",
+      "location": "Acton, MA"
     },
     {
       "key": "Cal State Games",
