@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-06-21T10:11:54.811Z",
+  "lastChecked": "2026-06-22T10:49:15.930Z",
   "tournaments": [
     {
       "key": "LV HoloEx Sat 100",
@@ -108,6 +108,12 @@
       "name": "State Games Follow-Up Tournament",
       "date": "Jul 26",
       "location": "Escondido, CA"
+    },
+    {
+      "key": "Great Lakes Open",
+      "name": "Great Lakes Open",
+      "date": "Aug 7-9",
+      "location": "Plymouth, MI"
     },
     {
       "key": "The Nationals 2026",
