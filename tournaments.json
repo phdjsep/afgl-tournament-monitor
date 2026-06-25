@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-06-24T10:02:56.020Z",
+  "lastChecked": "2026-06-25T10:01:47.919Z",
   "tournaments": [
     {
       "key": "LV HoloEx Sat 100",
@@ -86,12 +86,6 @@
       "location": "Guerrero, -"
     },
     {
-      "key": "State Games of Michigan",
-      "name": "State Games of Michigan",
-      "date": "Jun 27",
-      "location": "Lansing, MI"
-    },
-    {
       "key": "Bay State Games-Amateur Tour Event",
       "name": "Bay State Games-Amateur Tour Event",
       "date": "Jul 11",
@@ -114,6 +108,12 @@
       "name": "Great Lakes Open",
       "date": "Aug 7-9",
       "location": "Plymouth, MI"
+    },
+    {
+      "key": "State Games of Michigan",
+      "name": "State Games of Michigan",
+      "date": "Aug 8",
+      "location": "Lansing, MI"
     },
     {
       "key": "The Nationals 2026",
