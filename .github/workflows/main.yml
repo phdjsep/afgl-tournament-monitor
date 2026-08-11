@@ -7,7 +7,9 @@ on:
 
 jobs:
   monitor:
-    runs-on: ubuntu-latest
+    # Runs on a self-hosted runner at home: the AFGL site is behind AWS WAF,
+    # which challenges GitHub-hosted (datacenter) IPs. A residential IP passes.
+    runs-on: [self-hosted, afgl]
 
     steps:
     - name: Checkout repository
