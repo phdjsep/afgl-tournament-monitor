@@ -13,23 +13,53 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+// The AFGL site is behind AWS WAF, which serves a CAPTCHA challenge to
+// Chrome-based clients (including Puppeteer/headless Chrome and Node's default
+// no-User-Agent requests). A Safari User-Agent currently passes cleanly, so we
+// present one. See the header comment above if this ever regresses to 403/405.
+const REQUEST_HEADERS = {
+  'User-Agent':
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ' +
+    'AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+  'Accept':
+    'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+  'Accept-Language': 'en-US,en;q=0.9'
+};
+
+// Detect the AWS WAF "Human Verification" interstitial so failures are
+// self-explanatory instead of surfacing as a bare HTTP 403/405.
+function isWafChallenge(res, body) {
+  const wafAction = res.headers['x-amzn-waf-action'];
+  if (wafAction) return `AWS WAF challenge (x-amzn-waf-action: ${wafAction})`;
+  if (body && /Human Verification|awswaf|captcha\.awswaf/i.test(body)) {
+    return 'AWS WAF challenge (Human Verification page returned)';
+  }
+  return null;
+}
+
 // Function to fetch webpage content
 function fetchPage(url) {
   return new Promise((resolve, reject) => {
     console.log(`Attempting to fetch: ${url}`);
     const client = url.startsWith('https') ? https : http;
 
-    const request = client.get(url, (res) => {
+    const request = client.get(url, { headers: REQUEST_HEADERS }, (res) => {
       console.log(`HTTP Status: ${res.statusCode}`);
-
-      if (res.statusCode !== 200) {
-        reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
-        return;
-      }
 
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
+        const challenge = isWafChallenge(res, data);
+        if (challenge) {
+          reject(new Error(`Blocked by bot protection: ${challenge}`));
+          return;
+        }
+
+        if (res.statusCode !== 200) {
+          reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`));
+          return;
+        }
+
         console.log(`Page fetch completed. Content length: ${data.length}`);
         resolve(data);
       });

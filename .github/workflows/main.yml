@@ -11,249 +11,28 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v4
+      uses: actions/checkout@v5
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Set up Node.js
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v5
       with:
-        node-version: '18'
+        node-version: '20'
 
-    - name: Install Puppeteer
-      run: npm install puppeteer
+    - name: Install dependencies
+      run: npm ci
 
     - name: Monitor AFGL tournament schedule
       env:
         DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         TARGET_URL: 'https://afgl.bluegolf.com/bluegolf/afgl26/schedule/index.htm'
-      run: |
-        cat > monitor.js << 'EOF'
-        const puppeteer = require('puppeteer');
-        const https = require('https');
-        const fs = require('fs');
+      run: node monitor.js
 
-        const TARGET_URL = process.env.TARGET_URL;
-        const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
-        const TOURNAMENT_COUNT_FILE = 'tournament_count.txt';
-
-        // Fetch page HTML using a real headless browser
-        async function fetchPageWithBrowser(url, retries = 3) {
-          let browser;
-          try {
-            browser = await puppeteer.launch({
-              headless: 'new',
-              args: ['--no-sandbox', '--disable-setuid-sandbox']
-            });
-            const page = await browser.newPage();
-            await page.setUserAgent(
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-            );
-            await page.setViewport({ width: 1280, height: 800 });
-
-            console.log(`Navigating to: ${url}`);
-            const response = await page.goto(url, {
-              waitUntil: 'networkidle2',
-              timeout: 30000
-            });
-
-            const status = response ? response.status() : null;
-            console.log(`HTTP Status: ${status}`);
-
-            if (status && status >= 400) {
-              throw new Error(`HTTP ${status}: ${response.statusText()}`);
-            }
-
-            const html = await page.content();
-            await browser.close();
-            return html;
-
-          } catch (error) {
-            if (browser) await browser.close();
-            if (retries > 0) {
-              console.log(`Fetch failed (${error.message}). Retrying... (${retries} left)`);
-              await new Promise(r => setTimeout(r, 3000));
-              return fetchPageWithBrowser(url, retries - 1);
-            }
-            throw error;
-          }
-        }
-
-        function countTournamentRows(html) {
-          try {
-            console.log('Analyzing HTML content for tournament rows...');
-            const tableMatches = html.match(/<table[^>]*>[\s\S]*?<\/table>/gi);
-            console.log(`Found ${tableMatches ? tableMatches.length : 0} table(s)`);
-
-            if (!tableMatches || tableMatches.length === 0) {
-              console.log('No tables found in HTML');
-              return 0;
-            }
-
-            let totalTournamentCount = 0;
-
-            tableMatches.forEach((table, tableIndex) => {
-              const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
-              const rows = table.match(rowRegex);
-              if (!rows) return;
-
-              let tableRowCount = 0;
-
-              rows.forEach((row) => {
-                const cellRegex = /<(td|th)[^>]*>/gi;
-                const cellMatches = row.match(cellRegex);
-                const cellCount = cellMatches ? cellMatches.length : 0;
-
-                const rowText = row
-                  .replace(/<[^>]*>/g, ' ')
-                  .replace(/&nbsp;/g, ' ')
-                  .replace(/\s+/g, ' ')
-                  .trim()
-                  .toLowerCase();
-
-                if (rowText.length === 0) return;
-
-                if ((rowText.includes('tournament') && rowText.includes('date')) ||
-                    (rowText.includes('name') && rowText.includes('location')) ||
-                    (rowText.includes('register') && rowText.includes('time'))) {
-                  return;
-                }
-
-                if (cellCount >= 2 && rowText.length > 5) {
-                  tableRowCount++;
-                }
-              });
-
-              console.log(`  Table ${tableIndex + 1} tournament rows: ${tableRowCount}`);
-              totalTournamentCount += tableRowCount;
-            });
-
-            console.log(`Total tournament rows found: ${totalTournamentCount}`);
-            return totalTournamentCount;
-
-          } catch (error) {
-            console.error('Error in countTournamentRows:', error);
-            return 0;
-          }
-        }
-
-        function sendDiscordNotification(message) {
-          return new Promise((resolve, reject) => {
-            const url = new URL(DISCORD_WEBHOOK_URL);
-            const cleanMessage = message
-              .replace(/[\u0000-\u001F\u007F-\u009F]/g, '')
-              .replace(/"/g, '\\"')
-              .replace(/\\/g, '\\\\')
-              .substring(0, 1900);
-
-            const payload = JSON.stringify({
-              content: cleanMessage,
-              username: 'AFGL Tournament Monitor'
-            });
-
-            const options = {
-              hostname: url.hostname,
-              path: url.pathname + url.search,
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Content-Length': Buffer.byteLength(payload, 'utf8')
-              }
-            };
-
-            const req = https.request(options, (res) => {
-              let responseData = '';
-              res.on('data', chunk => responseData += chunk);
-              res.on('end', () => {
-                console.log(`Discord response status: ${res.statusCode}`);
-                resolve(res.statusCode);
-              });
-            });
-
-            req.on('error', reject);
-            req.write(payload);
-            req.end();
-          });
-        }
-
-        async function main() {
-          try {
-            console.log(`Checking AFGL tournament schedule at: ${TARGET_URL}`);
-
-            if (!TARGET_URL) throw new Error('TARGET_URL environment variable not set');
-            if (!DISCORD_WEBHOOK_URL) throw new Error('DISCORD_WEBHOOK_URL environment variable not set');
-
-            const rawContent = await fetchPageWithBrowser(TARGET_URL);
-
-            if (!rawContent || rawContent.length < 100) {
-              throw new Error(`Page content seems invalid. Length: ${rawContent ? rawContent.length : 0}`);
-            }
-
-            console.log(`Page fetched successfully. Content length: ${rawContent.length} characters`);
-
-            const currentTournamentCount = countTournamentRows(rawContent);
-            console.log(`Current tournament count: ${currentTournamentCount}`);
-
-            let previousCount = 0;
-            if (fs.existsSync(TOURNAMENT_COUNT_FILE)) {
-              const fileContent = fs.readFileSync(TOURNAMENT_COUNT_FILE, 'utf8').trim();
-              previousCount = parseInt(fileContent) || 0;
-              console.log(`Previous tournament count: ${previousCount}`);
-            } else {
-              console.log('No previous count file found - treating as first run');
-            }
-
-            if (previousCount === 0 && currentTournamentCount > 0) {
-              const message = `✅ **AFGL Tournament Monitor Active**\n\n` +
-                            `Now monitoring: ${TARGET_URL}\n\n` +
-                            `Baseline tournament count: ${currentTournamentCount}\n\n` +
-                            `You'll be notified when new tournaments are added to the schedule.`;
-              await sendDiscordNotification(message);
-
-            } else if (currentTournamentCount > previousCount && previousCount > 0) {
-              const newTournaments = currentTournamentCount - previousCount;
-              const message = `🏆 **${newTournaments} New Tournament(s) Added!**\n\n` +
-                            `${TARGET_URL}\n\n` +
-                            `Tournament count: ${currentTournamentCount} (was ${previousCount})\n\n` +
-                            `Check the schedule for new tournaments!`;
-              await sendDiscordNotification(message);
-
-            } else if (previousCount === 0 && currentTournamentCount === 0) {
-              console.log('Warning: No tournaments detected in current or previous runs');
-
-            } else if (currentTournamentCount < previousCount) {
-              console.log(`Note: Tournament count decreased from ${previousCount} to ${currentTournamentCount}`);
-
-            } else {
-              console.log('No change in tournament count');
-            }
-
-            fs.writeFileSync(TOURNAMENT_COUNT_FILE, currentTournamentCount.toString());
-            console.log('Count saved successfully');
-
-          } catch (error) {
-            console.error('Error in main function:', error);
-
-            try {
-              const errorMessage = `❌ **AFGL Monitor Error**\n\nFailed to check tournament schedule:\n\`\`\`\n${error.message}\n\`\`\``;
-              await sendDiscordNotification(errorMessage);
-            } catch (notificationError) {
-              console.error('Failed to send error notification:', notificationError);
-            }
-
-            throw error;
-          }
-        }
-
-        main();
-        EOF
-
-        node monitor.js
-
-    - name: Commit tournament count
+    - name: Commit tournament data
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
-        git add tournament_count.txt
-        git diff --staged --quiet || git commit -m "Update AFGL tournament count"
+        git add tournaments.json tournament_count.txt
+        git diff --staged --quiet || git commit -m "Update AFGL tournament data"
         git push
