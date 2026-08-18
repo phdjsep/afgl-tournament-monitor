@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-08-17T09:42:18.811Z",
+  "lastChecked": "2026-08-18T09:34:23.793Z",
   "tournaments": [
     {
       "key": "LV HoloEx Sat 100",
@@ -120,6 +120,12 @@
       "name": "Las Vegas FGC Open 2026",
       "date": "Oct 2-4",
       "location": "Henderson, NV"
+    },
+    {
+      "key": "The Woods - SAT 100",
+      "name": "The Woods - SAT 100",
+      "date": "Oct 4",
+      "location": "Hedgesville, WV"
     },
     {
       "key": "The Nationals 2026",
