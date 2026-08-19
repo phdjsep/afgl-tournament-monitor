@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-08-18T09:34:23.793Z",
+  "lastChecked": "2026-08-19T09:34:42.882Z",
   "tournaments": [
     {
       "key": "LV HoloEx Sat 100",
@@ -120,6 +120,12 @@
       "name": "Las Vegas FGC Open 2026",
       "date": "Oct 2-4",
       "location": "Henderson, NV"
+    },
+    {
+      "key": "Sligo Creek 2 Rounds 2 100's",
+      "name": "Sligo Creek 2 Rounds 2 100's",
+      "date": "Oct 3",
+      "location": "Silver Spring, MD"
     },
     {
       "key": "The Woods - SAT 100",
