@@ -1,5 +1,5 @@
 {
-  "lastChecked": "2026-09-17T14:09:12.256Z",
+  "lastChecked": "2026-09-18T13:28:00.492Z",
   "tournaments": [
     {
       "key": "LV HoloEx Sat 100",
@@ -114,12 +114,6 @@
       "name": "State Games of Michigan",
       "date": "Aug 8",
       "location": "Lansing, MI"
-    },
-    {
-      "key": "Las Vegas FGC Open 2026",
-      "name": "Las Vegas FGC Open 2026",
-      "date": "Oct 2-4",
-      "location": "Las Vegas, NV"
     },
     {
       "key": "Sligo Creek 2 Rounds 2 100's",
